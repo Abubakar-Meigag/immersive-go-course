@@ -1,10 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
-	"bufio"
 )
 
 func main() {
@@ -13,33 +14,11 @@ func main() {
 
 	for retry := 0; retry < maxRetries; retry++ {
 		res, err := http.Get("http://localhost:8080")
-		
 		if err != nil {
-			if res != nil {
-				fmt.Println("Response status:", res.Status)
-				if res.StatusCode == http.StatusTooManyRequests {
-					fmt.Println("Server is too busy. Retry after:", res.Header.Get("Retry-After"))
-
-					retryAfterStr := res.Header.Get("Retry-After")
-					retryAfter, err := time.ParseDuration(retryAfterStr)
-					if err != nil {
-						
-						retryAfter = retryInterval
-					}
-					time.Sleep(retryAfter)
-					continue 
-				} else {
-					fmt.Println("Failed to get response from server:", err)
-				}
-			} else {
-				fmt.Println("Failed to connect to server:", err)
-			}
-
-			
+			fmt.Println("Failed to get response from server:", err)
 			time.Sleep(retryInterval)
-			continue 
+			continue
 		}
-
 		defer res.Body.Close()
 
 		fmt.Println("Response status:", res.Status)
@@ -52,12 +31,22 @@ func main() {
 			if err := scanner.Err(); err != nil {
 				panic(err)
 			}
-			break 
+			break
+		} else if res.StatusCode == http.StatusTooManyRequests {
+			fmt.Println("Server is too busy. Retry after:", res.Header.Get("Retry-After"))
+
+			retryAfterStr := res.Header.Get("Retry-After")
+			retryAfter, err := strconv.Atoi(retryAfterStr)
+			if err != nil {
+				fmt.Println("Invalid Retry-After header value, defaulting to retry interval:", err)
+				retryAfter = int(retryInterval.Seconds())
+			}
+			time.Sleep(time.Duration(retryAfter) * time.Second)
+			continue
 		} else {
 			fmt.Println("Error response from server:", res.Status)
-			
 			time.Sleep(retryInterval)
-			continue 
+			continue
 		}
 	}
 
